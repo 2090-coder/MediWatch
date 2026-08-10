@@ -4,22 +4,22 @@
 
 MediWatch est un prototype de bracelet connecté destiné à la surveillance de paramètres physiologiques et à la gestion d'alertes d'urgence.
 
-> ⚠️ **Prototype uniquement.** Les valeurs et seuils de ce projet ne constituent pas un dispositif médical certifié et ne doivent pas servir au diagnostic ou au traitement d'une personne.
+> **Prototype uniquement.** Les valeurs et seuils de ce projet ne constituent pas un dispositif médical certifié et ne doivent pas servir au diagnostic ou au traitement d'une personne.
 
 ## Fonctionnalités V1
 
-- 🌡️ TMP117 : température
-- ❤️ MAX30102 : fréquence cardiaque et SpO₂
-- 📈 AD8232 : lecture ECG analogique
-- 🧭 MPU6050 : mouvement et détection expérimentale de chute
-- 🩺 Potentiomètre : simulation de pression systolique/diastolique
-- 📍 GPS : latitude/longitude
-- 📱 GSM : SMS d'urgence vers 3 contacts
-- 🆘 Bouton SOS
-- 🚨 LED RGB + buzzer
-- 🖥️ OLED SH1106 128×64
-- 🌐 Dashboard Web hébergé directement par l'ESP32
-- 📡 Mode Wi-Fi Access Point pour une utilisation locale sans Node.js
+- TMP117 : température
+- MAX30102 : fréquence cardiaque et SpO₂
+- AD8232 : lecture ECG analogique
+- MPU6050 : mouvement et détection expérimentale de chute
+- Potentiomètre : simulation de pression systolique/diastolique
+- GPS : latitude/longitude
+- GSM : SMS d'urgence vers 3 contacts
+- Bouton SOS
+- LED RGB + buzzer
+- OLED SH1106 128×64
+- Dashboard Web hébergé directement par l'ESP32
+- Mode Wi-Fi Access Point pour une utilisation locale sans Node.js
 
 ## Architecture
 
