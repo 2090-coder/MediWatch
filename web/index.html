@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MediWatch</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#eaf2ff;background:#08111f}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#08111f,#10233b);min-height:100vh}.wrap{max-width:1100px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;gap:15px}.brand{font-size:28px;font-weight:800}.status{padding:8px 12px;border-radius:20px;background:#123d2b;color:#70f0a0}.patient{color:#a9bad0;margin:5px 0 20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.card{background:#102238;border:1px solid #1e3855;border-radius:18px;padding:18px;box-shadow:0 10px 30px #0004}.label{color:#9bb0c8;font-size:13px}.value{font-size:30px;font-weight:700;margin-top:8px}.unit{font-size:14px;color:#9bb0c8}.wide{margin-top:14px}.ecg{width:100%;height:180px;background:#071522;border-radius:12px;display:block}.alert{margin-top:14px;padding:16px;border-radius:14px;background:#123d2b}.danger{background:#5b1720}.map{font-family:monospace;color:#a9bad0;line-height:1.7}.footer{text-align:center;color:#72869d;font-size:12px;padding:25px}button{border:0;border-radius:10px;padding:10px 15px;cursor:pointer;background:#eaf2ff;color:#08111f;font-weight:700}@media(max-width:600px){.brand{font-size:23px}.value{font-size:25px}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top"><div><div class="brand">⌚ MEDIWATCH</div><div class="patient">Patient : <strong id="patient">—</strong></div></div><div id="status" class="status">● Connexion...</div></header>
+  <section class="grid">
+    <article class="card"><div class="label">❤️ FRÉQUENCE CARDIAQUE</div><div class="value"><span id="hr">--</span> <span class="unit">BPM</span></div></article>
+    <article class="card"><div class="label">🫁 SpO₂</div><div class="value"><span id="spo2">--</span> <span class="unit">%</span></div></article>
+    <article class="card"><div class="label">🌡️ TEMPÉRATURE</div><div class="value"><span id="temp">--</span> <span class="unit">°C</span></div></article>
+    <article class="card"><div class="label">🩺 PRESSION</div><div class="value"><span id="bp">--/--</span> <span class="unit">mmHg</span></div></article>
+  </section>
+  <section class="card wide"><div class="label">📈 ECG</div><canvas id="ecg" class="ecg" width="1000" height="180"></canvas></section>
+  <section class="grid wide">
+    <article class="card"><div class="label">📍 GPS</div><div id="gps" class="map">Recherche de position...</div><p><a id="maps" href="#" target="_blank" rel="noopener"><button>Voir sur Google Maps</button></a></p></article>
+    <article class="card"><div class="label">🚨 ÉTAT DU SYSTÈME</div><div id="state" class="value">—</div><div id="fall" class="unit">Aucune chute détectée</div></article>
+  </section>
+  <section id="alert" class="alert wide">🟢 Système normal</section>
+  <div class="footer">MediWatch V1 · Prototype de surveillance · Données locales ESP32</div>
+</main>
+<script>
+const $=id=>document.getElementById(id), pts=[];
+const canvas=$("ecg"),ctx=canvas.getContext("2d");
+function drawECG(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.beginPath();pts.forEach((v,i)=>{const x=i*(canvas.width/Math.max(1,pts.length-1)),y=canvas.height/2-v*0.06;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle="#65f3ad";ctx.lineWidth=2;ctx.stroke()}
+function set(id,v){$(id).textContent=v}
+async function update(){try{const r=await fetch('/api/data',{cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();set('patient',d.patient??'—');set('hr',d.heartRateValid?d.heartRate:'--');set('spo2',d.spo2Valid?d.spo2:'--');set('temp',Number(d.temperature??0).toFixed(1));set('bp',`${Math.round(d.systolic??0)}/${Math.round(d.diastolic??0)}`);set('state',d.state??'—');$('status').textContent='● CONNECTÉ';$('status').style.background='#123d2b';$('status').style.color='#70f0a0';$('fall').textContent=d.fallDetected?'⚠️ Chute détectée':'Aucune chute détectée';$('alert').textContent=d.state==='CRITICAL'?'🔴 ALERTE CRITIQUE':d.state==='WARNING'?'🟡 ATTENTION':d.state==='SOS'?'🔵 SOS':'🟢 Système normal';$('alert').className='alert wide'+((d.state==='CRITICAL')?' danger':'');if(d.gpsValid){$('gps').textContent=`Latitude : ${Number(d.latitude).toFixed(6)}\nLongitude: ${Number(d.longitude).toFixed(6)}`;$('maps').href=`https://maps.google.com/?q=${d.latitude},${d.longitude}`}else{$('gps').textContent='Position GPS indisponible';$('maps').removeAttribute('href')}if(typeof d.ecg==='number'){pts.push(d.ecg-(d.ecgBaseline??2048));if(pts.length>300)pts.shift();drawECG()}}catch(e){$('status').textContent='● HORS LIGNE';$('status').style.background='#54202a';$('status').style.color='#ff9aa8'}}
+update();setInterval(update,500);
+</script>
+</body>
+</html>
