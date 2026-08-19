@@ -1,42 +1,128 @@
-# Architecture MediWatch V1
+# Architecture MediWatch V2
 
 ## Vue d'ensemble
 
 ```text
-                 MEDIWATCH V1
+                         MEDIWATCH V2
 
-  TMP117 ───────┐
-  MAX30102 ────┤
-  AD8232 ──────┤
-  MPU6050 ─────┤
-  Potentiomètre ┤
-  GPS ─────────┤
-  SOS ─────────┤
-                ↓
+ TMP117 ───────┐
+ MPU6050 ──────┤
+ MAX30102 ─────┤
+ OLED SH1106 ──┤
+ AD8232 ───────┤
+ Potentiomètre ┤
+ GPS ──────────┤
+ GSM ──────────┤
+ SOS ──────────┤
+ RGB/Buzzer ───┤
+               ▼
              ESP32
-       ┌────────┼─────────┐
-       ↓        ↓         ↓
-     OLED     GSM       Wi-Fi
-       │        │         │
-       │       SMS     Dashboard
-       │      alerte      Web
-       ↓
-    Patient
+        ┌──────┼──────────┐
+        │      │          │
+        ▼      ▼          ▼
+      OLED    GSM       Wi-Fi AP
+               │          │
+               ▼          ▼
+              SMS     Dashboard
+               │
+       ┌───────┴────────┐
+       ▼                ▼
+    Proches          Hôpital
 ```
 
-## Philosophie
+## Couches
 
-L'ESP32 reste le contrôleur principal. Aucun serveur Node.js n'est nécessaire pour la V1 : le serveur HTTP est directement exécuté sur l'ESP32.
+### 1. Acquisition
 
-Le GSM est réservé aux SMS d'urgence. Le Wi-Fi sert à l'interface locale de supervision.
+L'ESP32 lit :
 
-## États
+- température via TMP117 ;
+- accélération via MPU6050 ;
+- signal optique via MAX30102 ;
+- ECG analogique via AD8232 ;
+- potentiomètre pour la pression simulée ;
+- trames NMEA du GPS.
 
-- `NORMAL` : paramètres dans les limites définies.
-- `WARNING` : paramètre anormal mais non critique.
-- `CRITICAL` : paramètre critique ou chute détectée.
-- `SOS` : déclenchement manuel du bouton d'urgence.
+### 2. Traitement
 
-## Sécurité de conception
+Le firmware calcule ou maintient :
 
-Les mesures sont destinées au prototype. Toute décision médicale doit être prise avec des instruments et procédures médicales appropriés.
+- température ;
+- FC expérimentale ;
+- SpO₂ expérimentale ;
+- valeur ECG instantanée ;
+- pression systolique/diastolique simulée ;
+- position GPS ;
+- magnitude de l'accélération ;
+- état global.
+
+### 3. Décision
+
+```text
+NORMAL
+   │
+   ├── anomalie non critique ───────> WARNING
+   │
+   ├── pression simulée critique
+   │      └── confirmation 5 s ─────> CRITICAL
+   │
+   ├── chute expérimentale ─────────> CRITICAL
+   │
+   └── bouton SOS ──────────────────> SOS
+```
+
+### 4. Sorties
+
+**Locale :**
+
+- OLED ;
+- LED RGB ;
+- buzzer.
+
+**Communication :**
+
+- GSM → SMS ;
+- GPS → coordonnées dans l'alerte ;
+- Wi-Fi → dashboard local.
+
+## Pourquoi Wi-Fi + GSM ?
+
+Les deux communications ont des rôles différents :
+
+- **GSM** : canal d'urgence indépendant du Wi-Fi local pour envoyer un SMS.
+- **Wi-Fi** : interface de supervision locale riche pour afficher les mesures et l'état du prototype.
+
+## Dashboard
+
+Le serveur Web est directement exécuté par l'ESP32. Aucun serveur Node.js n'est requis pour le dashboard local V2.
+
+```text
+Téléphone / PC
+      │
+      │ Wi-Fi
+      ▼
+MEDIWATCH AP
+      │
+      ▼
+ESP32 WebServer
+      │
+      ├── /
+      ├── /api/data
+      └── /api/status
+```
+
+## Philosophie de sécurité
+
+Le prototype sépare explicitement les éléments simulés des éléments réellement acquis :
+
+```text
+PRESSION → SIMULÉE
+GPS      → RÉEL
+TEMP     → RÉEL / CAPTEUR
+ECG      → ACQUISITION
+FC       → EXPÉRIMENTALE
+SpO₂     → EXPÉRIMENTALE
+CHUTE    → EXPÉRIMENTALE
+```
+
+Aucune sortie du prototype ne doit être considérée comme une décision médicale.
