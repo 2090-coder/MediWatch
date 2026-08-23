@@ -1,143 +1,274 @@
-# Hardware MediWatch NEO
+# Hardware — MediWatch NEO
 
-## Modules
+## Carte utilisee
 
-- ESP32
-- MAX30102 : frequence cardiaque + SpO2 experimental
-- AD8232 : acquisition ECG reelle
-- MPU6050 : mouvement / chute experimentale
-- Potentiometre TEMP : simulation du TMP117 absent
-- Potentiometre PRESSION : simulation de pression arterielle
-- Potentiometre FC : simulation d'une anomalie de frequence cardiaque
-- GPS UART : position reelle
-- GSM UART : SMS d'urgence
-- OLED SH1106 128x64 I2C
-- Bouton SOS
-- Buzzer
-- LED RGB
-- Resistances pour LED RGB
+La carte de la photo est une **NodeMCU ESP-32S / ESP32S**, avec les broches imprimees sous forme `Pxx`, `VP` et `VN`.
 
-## Brochage NEO
-
-| Fonction | ESP32 |
-|---|---:|
-| I2C SDA | GPIO 21 |
-| I2C SCL | GPIO 22 |
-| AD8232 OUT | GPIO 34 |
-| Potentiometre TEMP | GPIO 36 |
-| Potentiometre PRESSION | GPIO 35 |
-| Potentiometre FC | GPIO 39 |
-| GPS RX | GPIO 16 |
-| GPS TX | GPIO 17 |
-| GSM RX | GPIO 26 |
-| GSM TX | GPIO 27 |
-| SOS | GPIO 32 |
-| Buzzer | GPIO 14 |
-| RGB Rouge | GPIO 25 |
-| RGB Vert | GPIO 33 |
-| RGB Bleu | GPIO 13 |
-
-## Bus I2C
-
-GPIO 21 (SDA) est partage par le MPU6050, MAX30102 et OLED.
-GPIO 22 (SCL) est partage par le MPU6050, MAX30102 et OLED.
-
-## Potentiometre TEMP — remplacement du TMP117
+Correspondance importante :
 
 ```text
-3V3  -> extremite 1
-GND  -> extremite 2
-GPIO 36 -> curseur
+VP = GPIO36
+VN = GPIO39
+P34 = GPIO34
+P35 = GPIO35
+P32 = GPIO32
+P33 = GPIO33
+P25 = GPIO25
+P26 = GPIO26
+P27 = GPIO27
+P14 = GPIO14
+P13 = GPIO13
+P21 = GPIO21
+P22 = GPIO22
+P16 = GPIO16
+P17 = GPIO17
 ```
 
-Le firmware transforme la position en temperature simulee. Le TMP117 n'est pas necessaire dans NEO.
+## Brochage complet NEO
 
-## Potentiometre PRESSION
+| Module / fonction | Broche visible sur la carte | GPIO ESP32 |
+|---|---|---:|
+| OLED SDA | P21 | GPIO21 |
+| OLED SCL | P22 | GPIO22 |
+| MPU6050 SDA | P21 | GPIO21 |
+| MPU6050 SCL | P22 | GPIO22 |
+| MAX30102 SDA | P21 | GPIO21 |
+| MAX30102 SCL | P22 | GPIO22 |
+| AD8232 OUT | P34 | GPIO34 |
+| POT-TMP | VP | GPIO36 |
+| POT-PRESSION | P35 | GPIO35 |
+| POT-FC | VN | GPIO39 |
+| GPS TX → ESP32 RX | P16 | GPIO16 |
+| GPS RX ← ESP32 TX | P17 | GPIO17 |
+| GSM TX → ESP32 RX | P26 | GPIO26 |
+| GSM RX ← ESP32 TX | P27 | GPIO27 |
+| Bouton SOS | P32 | GPIO32 |
+| Buzzer | P14 | GPIO14 |
+| LED RGB Rouge | P25 | GPIO25 |
+| LED RGB Vert | P33 | GPIO33 |
+| LED RGB Bleu | P13 | GPIO13 |
+
+## Alimentation
+
+Pour les capteurs 3,3 V :
 
 ```text
-3V3  -> extremite 1
-GND  -> extremite 2
-GPIO 35 -> curseur
+ESP32 3V3 → VCC des modules compatibles 3,3 V
+ESP32 GND → GND commun
 ```
 
-Il simule la pression systolique/diastolique. Ce n'est pas une mesure medicale.
+Le GSM doit avoir **son alimentation adaptee au modele exact**. Ne pas alimenter un module GSM depuis un GPIO de l'ESP32.
 
-## AD8232 + potentiometre FC
+Toutes les masses doivent etre communes : ESP32, GPS, GSM, AD8232, OLED, MPU6050, MAX30102 et potentiometres.
 
-AD8232 reste branche normalement :
+## 1. Bus I2C
+
+Les modules suivants partagent P21/P22 :
 
 ```text
-AD8232 OUTPUT -> GPIO 34
-AD8232 GND    -> GND
-AD8232 3.3V   -> 3V3
+ESP32 P21 / GPIO21 (SDA)
+       ├── OLED SDA
+       ├── MPU6050 SDA
+       └── MAX30102 SDA
+
+ESP32 P22 / GPIO22 (SCL)
+       ├── OLED SCL
+       ├── MPU6050 SCL
+       └── MAX30102 SCL
 ```
 
-Le signal ECG AD8232 est acquis et affiche.
+VCC et GND de chaque module vont vers l'alimentation compatible du module.
 
-Le potentiometre FC est independant :
+## 2. POT-TMP — remplacement du TMP117
+
+Le TMP117 n'est pas disponible dans NEO. Le potentiometre sur `VP/GPIO36` simule la temperature.
 
 ```text
-3V3  -> extremite 1
-GND  -> extremite 2
-GPIO 39 -> curseur
+POT-TMP
+  extremite 1 → 3V3
+  extremite 2 → GND
+  curseur     → VP / GPIO36
 ```
 
-Il simule une frequence cardiaque. Si le potentiometre est dans la plage normale (50 a 120 BPM), la FC MAX30102 est conservee comme source effective lorsqu'elle est valide. Si le potentiometre sort de cette plage, il devient la source de simulation de l'anomalie.
+Le programme transforme la position en environ **30 à 45 °C**.
 
-## GPS
+Plage normale utilisee : **36,0 à 37,9 °C**.
+
+## 3. POT-PRESSION
 
 ```text
-GPS TX -> ESP32 GPIO 16 (RX)
-GPS RX -> ESP32 GPIO 17 (TX)
-GND commun
+POT-PRESSION
+  extremite 1 → 3V3
+  extremite 2 → GND
+  curseur     → P35 / GPIO35
 ```
 
-## GSM
+Le programme simule environ **70 à 200 mmHg systolique**.
+
+La pression est une simulation pedagogique, pas une mesure arterielle.
+
+## 4. AD8232 — ECG reel
+
+L'AD8232 reste un vrai module.
 
 ```text
-GSM TX -> ESP32 GPIO 26 (RX)
-GSM RX -> ESP32 GPIO 27 (TX)
-GND commun
+AD8232 3.3V    → ESP32 3V3
+AD8232 GND     → ESP32 GND
+AD8232 OUTPUT  → P34 / GPIO34
 ```
 
-Le GSM doit utiliser une alimentation adaptee a son modele et a ses pointes de courant. Ne pas l'alimenter depuis un GPIO de l'ESP32.
+Les electrodes sont branchees normalement sur RA, LA et RL selon le module.
 
-## SOS / buzzer / RGB
+Le signal analogique est affiche/acquis. Le firmware ne fait **aucune interpretation medicale** de l'ECG.
+
+## 5. POT-FC + AD8232
+
+Le deuxieme potentiometre ne remplace pas l'AD8232. Il sert a creer volontairement une anomalie de frequence cardiaque pour la demonstration.
 
 ```text
-SOS    : GPIO 32 -> bouton -> GND
-Buzzer : GPIO 14
-RGB R  : GPIO 25 + resistance
-RGB G  : GPIO 33 + resistance
-RGB B  : GPIO 13 + resistance
+POT-FC
+  extremite 1 → 3V3
+  extremite 2 → GND
+  curseur     → VN / GPIO39
 ```
 
-## Regle d'alerte MEDIWATCH NEO
+Le potentiometre simule environ **40 à 180 BPM**.
 
-L'affichage et le diagnostic de prototype restent actifs meme si une seule source est anormale.
+```text
+50 à 120 BPM → plage normale
+< 50 BPM     → anomalie
+> 120 BPM    → anomalie
+```
 
-**SMS automatique = uniquement si 5/5 conditions sont anormales simultanement :**
+Quand le POT-FC est normal, le firmware utilise la FC du MAX30102 si elle est valide. L'AD8232 continue toujours d'acquerir son ECG.
 
-1. MPU6050 anormal / chute detectee
-2. Pot-TMP hors plage normale
-3. Pot-pression hors plage normale
-4. Pot-FC hors plage normale, avec AD8232 reel acquis et affiche
-5. MAX30102 anormal (FC ou SpO2 critique)
+Pour la condition d'urgence, il faut :
 
-Le bouton **SOS** est volontairement une exception : il declenche un SMS immediat.
+```text
+POT-FC anormal
+      ET
+signal AD8232 acquis
+```
 
-## Ordre de montage
+## 6. MAX30102
+
+```text
+MAX30102 VCC → alimentation compatible
+MAX30102 GND → GND
+MAX30102 SDA → P21 / GPIO21
+MAX30102 SCL → P22 / GPIO22
+```
+
+Le MAX30102 fournit experimentalement FC + SpO2.
+
+## 7. MPU6050
+
+```text
+MPU6050 VCC → alimentation compatible
+MPU6050 GND → GND
+MPU6050 SDA → P21 / GPIO21
+MPU6050 SCL → P22 / GPIO22
+```
+
+Une chute est detectee experimentalement par combinaison chute libre / impact.
+
+## 8. GPS
+
+Le TX du GPS va vers le RX de l'ESP32 et inversement :
+
+```text
+GPS TX → P16 / GPIO16
+GPS RX → P17 / GPIO17
+GPS GND → GND commun
+GPS VCC → alimentation compatible
+```
+
+## 9. GSM
+
+```text
+GSM TX → P26 / GPIO26
+GSM RX → P27 / GPIO27
+GSM GND → GND commun
+GSM VCC → alimentation adaptee au modele
+```
+
+Le GSM envoie les SMS aux proches et au contact hopital configure.
+
+## 10. Bouton SOS
+
+Le firmware utilise `INPUT_PULLUP` :
+
+```text
+P32 / GPIO32 ─── bouton ─── GND
+```
+
+```text
+Relache → HIGH
+Appuye  → LOW
+```
+
+Le SOS est une exception : **un SOS envoie immediatement l'alerte**, sans attendre la condition 5/5.
+
+## 11. Buzzer
+
+Pour un petit buzzer compatible GPIO :
+
+```text
+P14 / GPIO14 → BUZZER +
+GND          → BUZZER -
+```
+
+Si le buzzer demande trop de courant, utiliser un transistor de commande et une alimentation adaptee.
+
+## 12. LED RGB
+
+Pour une RGB a cathode commune :
+
+```text
+P25 / GPIO25 → resistance → R
+P33 / GPIO33 → resistance → G
+P13 / GPIO13 → resistance → B
+Cathode commune → GND
+```
+
+Utiliser une resistance par couleur.
+
+## Regle stricte MEDIWATCH NEO
+
+Le bracelet peut afficher une anomalie unique, mais le **SMS automatique est bloque** tant que les cinq conditions ne sont pas simultanement vraies :
+
+```text
+1. MPU6050 anormal / chute
+             AND
+2. POT-TMP hors plage normale
+             AND
+3. POT-PRESSION hors plage normale
+             AND
+4. POT-FC hors plage + AD8232 actif
+             AND
+5. MAX30102 anormal
+             ↓
+        5/5 CONDITIONS
+             ↓
+       confirmation 5 s
+             ↓
+          SMS GSM
+```
+
+## Ordre conseille de montage
 
 1. ESP32 + alimentation
-2. OLED + bus I2C
+2. OLED + I2C P21/P22
 3. MPU6050
 4. MAX30102
-5. Pot-TMP
-6. Pot-pression
-7. AD8232
-8. Pot-FC
-9. GPS
-10. RGB + buzzer + SOS
-11. GSM et son alimentation adaptee
+5. POT-TMP sur VP
+6. POT-PRESSION sur P35
+7. AD8232 sur P34
+8. POT-FC sur VN
+9. GPS P16/P17
+10. RGB P25/P33/P13 + resistances
+11. Buzzer P14
+12. SOS P32
+13. GSM P26/P27 + alimentation adaptee
 
-Tester chaque bloc avant d'ajouter le suivant.
+Tester chaque module avant de mettre en place la logique 5/5.
