@@ -1,157 +1,176 @@
 # MediWatch
 
-**MediWatch — Bracelet de surveillance connectée basé sur ESP32**
+**MediWatch — Bracelet de surveillance connectee base sur ESP32**
 
-MediWatch est un **prototype expérimental** développé pour explorer la surveillance de paramètres physiologiques, la détection d'événements et l'envoi d'alertes avec un ESP32.
+MediWatch est un prototype experimental destine a explorer l'acquisition de signaux, la simulation de certains parametres, la detection d'evenements et l'envoi d'alertes.
 
-> **AVERTISSEMENT IMPORTANT** : MediWatch n'est pas un dispositif médical certifié. La pression artérielle est **simulée par potentiomètre** dans ce prototype. L'ECG n'est pas interprété médicalement, la FC/SpO₂ sont expérimentales et la détection de chute est expérimentale. Le système ne doit pas être utilisé pour diagnostiquer, traiter ou surveiller médicalement une personne.
+> **AVERTISSEMENT IMPORTANT :** MediWatch n'est pas un dispositif medical certifie. Temperature, pression et frequence cardiaque simulees par potentiometres ne sont pas des mesures medicales. L'ECG n'est pas interprete medicalement. FC, SpO2 et detection de chute sont experimentaux. Ne pas utiliser pour diagnostiquer ou traiter une personne.
 
-## Objectif
+## MediWatch NEO — architecture actuelle
 
-Lorsqu'un événement critique est détecté, MediWatch doit pouvoir :
-
-1. avertir localement avec LED RGB + buzzer ;
-2. afficher l'état sur l'OLED 1,3" ;
-3. envoyer une alerte GSM aux proches ;
-4. envoyer l'alerte à un contact hospitalier configuré ;
-5. joindre la position GPS sous forme de lien Google Maps ;
-6. afficher les données en temps réel sur un dashboard Web local hébergé par l'ESP32.
-
-## V2 — Architecture actuelle
+La version NEO remplace le TMP117 absent par un potentiometre de temperature et ajoute deux potentiometres de simulation : pression et frequence cardiaque.
 
 ```text
-                         ┌──────────────────┐
-                         │       ESP32       │
-                         │  contrôleur V2    │
-                         └────────┬─────────┘
-                                  │
-              ┌───────────────────┼───────────────────┐
-              │                   │                   │
-             I²C                 UART              Analogique
-              │                   │                   │
-       ┌──────┼───────┐      ┌────┴────┐        ┌─────┴─────┐
-       │      │       │      │         │        │           │
-     TMP117 MPU6050 MAX30102 GPS       GSM    AD8232      POT
-       │      │       │      │         │        │           │
-       └──────┴───────┴──┐   │         │        │           │
-                         │   │         │        │           │
-                      OLED  │         │        │           │
-                         │   │         │        │           │
-                         └───┴─────────┴────────┴───────────┘
+                       MEDIWATCH NEO
+                              |
+                           ESP32
+                              |
+        +---------------------+----------------------+
+        |                     |                      |
+       I2C                   UART                  ANALOG
+        |                     |                      |
+   +----+-----+          +----+----+        +-------+--------+
+   |    |     |          |         |        |       |        |
+ MPU MAX  OLED          GPS       GSM    AD8232  POT-TMP  POT-PRESSION
+                                            |               |
+                                            +---- POT-FC ----+
 
-                GPIO 32 → SOS
-                GPIO 14 → Buzzer
-                GPIO 25 → RGB Rouge
-                GPIO 33 → RGB Vert
-                GPIO 13 → RGB Bleu
-
-                         ESP32 Wi-Fi
-                              │
-                              ▼
-                       Dashboard local
+                 + RGB + Buzzer + SOS
 ```
 
-## Modules V2
+## Modules NEO
 
-| Module | Rôle | Connexion |
-|---|---|---|
-| ESP32 | Contrôleur | — |
-| TMP117 | Température | I²C |
-| MPU6050 | Mouvement / chute expérimentale | I²C |
-| MAX30102 | FC + SpO₂ expérimentale | I²C |
-| OLED SH1106 1,3" | Affichage | I²C |
-| AD8232 | Acquisition ECG | GPIO 34 |
-| Potentiomètre | Simulation pression | GPIO 35 |
-| GPS | Position réelle | UART1 |
-| GSM | SMS réel | UART2 |
-| Bouton SOS | Alerte manuelle | GPIO 32 |
-| Buzzer | Alerte locale | GPIO 14 |
-| LED RGB | État système | GPIO 25/33/13 |
+| Module | Role |
+|---|---|
+| ESP32 | controle principal |
+| MPU6050 | mouvement / chute experimentale |
+| MAX30102 | FC + SpO2 experimentaux |
+| OLED SH1106 1.3" | affichage local |
+| AD8232 | acquisition ECG reelle, sans interpretation medicale |
+| Pot-TMP | simulation temperature, remplacement du TMP117 |
+| Pot-pression | simulation pression arterielle |
+| Pot-FC | simulation d'une FC anormale |
+| GPS | localisation reelle |
+| GSM | SMS |
+| SOS | alerte manuelle |
+| RGB + buzzer | alertes locales |
 
-## Brochage V2
+## Brochage NEO
 
 | Fonction | ESP32 |
 |---|---:|
-| I²C SDA — TMP117 | GPIO 21 |
-| I²C SCL — TMP117 | GPIO 22 |
-| I²C SDA — MPU6050 | GPIO 21 |
-| I²C SCL — MPU6050 | GPIO 22 |
-| I²C SDA — MAX30102 | GPIO 21 |
-| I²C SCL — MAX30102 | GPIO 22 |
-| I²C SDA — OLED | GPIO 21 |
-| I²C SCL — OLED | GPIO 22 |
+| I2C SDA | GPIO 21 |
+| I2C SCL | GPIO 22 |
 | AD8232 OUT | GPIO 34 |
-| Potentiomètre OUT | GPIO 35 |
-| GPS TX → ESP32 RX | GPIO 16 |
-| GPS RX ← ESP32 TX | GPIO 17 |
-| GSM TX → ESP32 RX | GPIO 26 |
-| GSM RX ← ESP32 TX | GPIO 27 |
-| Bouton SOS | GPIO 32 |
+| Pot-TMP | GPIO 36 |
+| Pot-pression | GPIO 35 |
+| Pot-FC | GPIO 39 |
+| GPS RX | GPIO 16 |
+| GPS TX | GPIO 17 |
+| GSM RX | GPIO 26 |
+| GSM TX | GPIO 27 |
+| SOS | GPIO 32 |
 | Buzzer | GPIO 14 |
 | RGB Rouge | GPIO 25 |
 | RGB Vert | GPIO 33 |
 | RGB Bleu | GPIO 13 |
 
-Tous les modules doivent avoir une **masse commune**. Les tensions d'alimentation doivent être vérifiées selon le modèle exact de chaque module. Le GSM doit disposer d'une alimentation capable de fournir ses pointes de courant.
+GPIO 21/22 sont le bus I2C partage par MPU6050, MAX30102 et OLED.
 
-Voir [`hardware/README.md`](hardware/README.md) et [`docs/wiring.md`](docs/wiring.md).
+## Logique FC + AD8232
 
-## Logique d'alerte V2
+L'AD8232 reste reel et son signal analogique est acquis sur GPIO 34 et affiche sur le dashboard.
 
-| Condition | État | Réaction |
-|---|---|---|
-| Fonctionnement normal | NORMAL | LED verte |
-| Pression simulée ≥ 140 mmHg | WARNING | LED jaune |
-| Pression simulée ≥ 160 mmHg pendant 5 s | CRITICAL | LED rouge + buzzer + SMS |
-| Température ≥ 38 °C | WARNING | LED jaune |
-| Température ≥ 39 °C | CRITICAL | LED rouge + buzzer + SMS |
-| SpO₂ ≤ 94 % | WARNING | LED jaune |
-| SpO₂ ≤ 90 % | CRITICAL | LED rouge + buzzer + SMS |
-| FC < 50 ou > 120 BPM | WARNING | LED jaune |
-| Chute expérimentale | CRITICAL | Alerte immédiate |
-| SOS | SOS | Alerte immédiate |
+Le Pot-FC sert a provoquer volontairement une anomalie de frequence cardiaque :
 
-Le SOS et une chute critique ne doivent pas attendre la confirmation de 5 secondes utilisée pour la pression simulée.
+- Pot-FC entre 50 et 120 BPM : plage normale ; la FC MAX30102 est utilisee comme FC effective si elle est valide.
+- Pot-FC < 50 ou > 120 BPM : le Pot-FC devient la source effective pour simuler l'anomalie.
+- L'AD8232 continue toujours d'etre acquis et affiche.
 
-## Alertes GSM
+## Regle d'envoi automatique NEO
 
-Le message d'urgence peut être envoyé à :
+Une anomalie unique ne suffit **pas** pour envoyer un SMS automatique.
 
-- `contact1`
-- `contact2`
-- `contact3`
-- `hospitalContact`
+Le SMS automatique est autorise uniquement lorsque **les 5 conditions sont anormales simultanement** pendant 5 secondes :
 
-Le SMS contient notamment le patient, le motif, les valeurs disponibles et un lien Google Maps lorsque le GPS est valide.
+```text
+MPU6050 anormal / chute
+        AND
+Pot-TMP anormal
+        AND
+Pot-PRESSION anormal
+        AND
+Pot-FC anormal + AD8232 acquis
+        AND
+MAX30102 anormal
+        = SMS D'URGENCE
+```
 
-Avant tout essai, remplacer les numéros `+243XXXXXXXXX` dans le firmware V2.
+Cette logique est volontairement stricte pour le prototype et reduit les faux declenchements.
 
-## Dashboard Web
+### Exception SOS
 
-L'ESP32 crée un point d'accès Wi-Fi local :
+Le bouton SOS reste independant de cette regle : une pression sur SOS provoque une alerte immediate.
 
-- **SSID :** `MEDIWATCH`
-- **Mot de passe :** `mediwatch123`
-- **Adresse :** `http://192.168.4.1`
+## Pot-TMP
 
-Le dashboard affiche :
+Le TMP117 n'est pas disponible. Le potentiometre de temperature est donc transforme par le firmware en temperature simulee.
 
-- fréquence cardiaque ;
-- SpO₂ ;
-- température ;
-- pression simulée ;
-- ECG acquis ;
-- latitude / longitude ;
-- lien Google Maps ;
-- état du système ;
-- motif de l'alerte ;
-- détection de chute.
+Branchement :
 
-API principales :
+```text
+3V3 -> extremite 1
+GND -> extremite 2
+GPIO 36 -> curseur
+```
 
-- `GET /` — dashboard
-- `GET /api/data` — données du bracelet en JSON
-- `GET /api/status` — état des modules
+## Pot-pression
+
+```text
+3V3 -> extremite 1
+GND -> extremite 2
+GPIO 35 -> curseur
+```
+
+La valeur est transformee en pression systolique/diastolique simulee.
+
+## Pot-FC
+
+```text
+3V3 -> extremite 1
+GND -> extremite 2
+GPIO 39 -> curseur
+```
+
+Il permet de simuler volontairement 40 BPM, 180 BPM, etc., sans devoir provoquer une vraie anomalie physiologique.
+
+## AD8232
+
+```text
+AD8232 OUTPUT -> GPIO 34
+AD8232 GND    -> GND
+AD8232 3.3V   -> 3V3
+```
+
+Les electrodes RA/LA/RL sont raccordees au breakout AD8232 selon son repere.
+
+## GPS / GSM
+
+```text
+GPS TX -> GPIO 16
+GPS RX -> GPIO 17
+
+GSM TX -> GPIO 26
+GSM RX -> GPIO 27
+```
+
+Le GSM doit avoir une alimentation adaptee a son modele et a ses pointes de courant. Ne jamais alimenter un modem GSM puissant depuis un GPIO.
+
+## Dashboard
+
+L'ESP32 cree un Wi-Fi local :
+
+- SSID : `MEDIWATCH`
+- Mot de passe : `mediwatch123`
+- Dashboard : `http://192.168.4.1`
+
+Endpoints :
+
+- `/` — dashboard NEO
+- `/api/data` — donnees temps reel
+- `/api/status` — statut des modules
+
+Le dashboard indique notamment quelle source de FC est utilisee et affiche les 5 conditions de la logique d'urgence.
 
 ## Arborescence
 
@@ -160,8 +179,11 @@ MediWatch/
 ├── firmware/
 │   ├── MediWatch_V1/
 │   │   └── MediWatch_V1.ino
-│   └── MediWatch_V2/
-│       ├── MediWatch_V2.ino
+│   ├── MediWatch_V2/
+│   │   ├── MediWatch_V2.ino
+│   │   └── README.md
+│   └── MediWatch_NEO/
+│       ├── MediWatch_NEO.ino
 │       └── README.md
 ├── hardware/
 │   └── README.md
@@ -169,17 +191,11 @@ MediWatch/
 │   ├── architecture.md
 │   ├── protocol.md
 │   └── wiring.md
-├── web/
-├── .gitignore
-├── LICENSE
 └── README.md
 ```
 
-## Bibliothèques Arduino V2
+## Bibliotheques NEO
 
-Installer :
-
-- Adafruit TMP117
 - Adafruit MPU6050
 - Adafruit Unified Sensor
 - SparkFun MAX3010x Sensor Library
@@ -190,51 +206,34 @@ Installer :
 
 ## Mise en route
 
-1. Installer Arduino IDE.
-2. Installer le core ESP32.
-3. Installer les bibliothèques V2.
-4. Ouvrir `firmware/MediWatch_V2/MediWatch_V2.ino`.
-5. Sélectionner la carte ESP32 correspondant au matériel utilisé.
-6. Réaliser le câblage décrit dans `docs/wiring.md`.
-7. Vérifier particulièrement l'alimentation du GSM.
-8. Configurer les quatre numéros GSM dans le firmware.
-9. Téléverser le programme.
-10. Ouvrir le moniteur série à 115200 bauds.
-11. Connecter un téléphone ou PC au Wi-Fi `MEDIWATCH`.
-12. Ouvrir `http://192.168.4.1`.
+1. Installer Arduino IDE et le core ESP32.
+2. Installer les bibliotheques NEO.
+3. Ouvrir `firmware/MediWatch_NEO/MediWatch_NEO.ino`.
+4. Verifier le cablage dans `hardware/README.md`.
+5. Configurer les numeros `contact1`, `contact2`, `contact3` et `hospitalContact`.
+6. Verifier l'alimentation du GSM.
+7. Televerser.
+8. Ouvrir le moniteur serie a 115200 bauds.
+9. Se connecter au Wi-Fi `MEDIWATCH`.
+10. Ouvrir `http://192.168.4.1`.
 
-## Ordre de test recommandé
+## Ordre de test
 
-```text
+Tester progressivement :
+
 1. ESP32 + OLED
-2. Bus I²C
-3. TMP117
-4. MPU6050
-5. MAX30102
+2. I2C + MPU6050
+3. MAX30102
+4. Pot-TMP
+5. Pot-pression
 6. AD8232
-7. Potentiomètre
+7. Pot-FC
 8. GPS
-9. LED + buzzer + SOS
+9. RGB + buzzer + SOS
 10. GSM
 11. Dashboard
-12. Test d'alerte complet
-```
-
-Ne branchez pas tous les modules simultanément lors du premier test sans avoir validé leurs alimentations.
-
-## Limites techniques
-
-- La pression est une **simulation**, pas une mesure.
-- Le SpO₂ n'est pas une mesure médicale certifiée.
-- La fréquence cardiaque dépend de la qualité du signal du MAX30102.
-- L'ECG est seulement acquis et visualisé ; aucune interprétation clinique n'est effectuée.
-- La détection de chute est expérimentale.
-- Le GPS peut être indisponible à l'intérieur.
-- Le GSM dépend du réseau, de la SIM et de l'alimentation du modem.
-- Le dashboard V2 est local au Wi-Fi créé par l'ESP32 ; ce n'est pas encore une plateforme Internet distante.
+12. Test des 5 conditions d'urgence
 
 ## Statut
 
-**MediWatch V2 — Prototype fonctionnel en développement.**
-
-La V2 constitue la base de travail pour les essais matériels, l'amélioration de la fiabilité des mesures et les futures versions du bracelet.
+**MediWatch NEO — nouvelle base de simulation du prototype.**
