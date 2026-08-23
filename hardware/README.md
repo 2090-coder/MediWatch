@@ -1,213 +1,143 @@
-# Hardware MediWatch V2
+# Hardware MediWatch NEO
 
-## 1. Liste du matériel
+## Modules
 
 - ESP32
-- TMP117
-- MPU6050
-- MAX30102
-- OLED SH1106 1,3" 128×64 I²C
-- AD8232
-- Potentiomètre
-- GPS UART
-- Module GSM UART
+- MAX30102 : frequence cardiaque + SpO2 experimental
+- AD8232 : acquisition ECG reelle
+- MPU6050 : mouvement / chute experimentale
+- Potentiometre TEMP : simulation du TMP117 absent
+- Potentiometre PRESSION : simulation de pression arterielle
+- Potentiometre FC : simulation d'une anomalie de frequence cardiaque
+- GPS UART : position reelle
+- GSM UART : SMS d'urgence
+- OLED SH1106 128x64 I2C
 - Bouton SOS
 - Buzzer
 - LED RGB
-- Résistances pour LED RGB
-- Alimentation adaptée au GSM
-- Fils / breadboard pour le prototype
+- Resistances pour LED RGB
 
-## 2. Bus I²C partagé
+## Brochage NEO
 
-Les quatre périphériques I²C utilisent le même bus :
-
-```text
-ESP32 GPIO 21 (SDA) ── TMP117 SDA
-                    ├─ MPU6050 SDA
-                    ├─ MAX30102 SDA
-                    └─ OLED SDA
-
-ESP32 GPIO 22 (SCL) ── TMP117 SCL
-                    ├─ MPU6050 SCL
-                    ├─ MAX30102 SCL
-                    └─ OLED SCL
-```
-
-Alimentation et masse doivent être compatibles avec chaque breakout. Vérifier la documentation du module utilisé avant de brancher VCC.
-
-## 3. Câblage détaillé
-
-### TMP117
-
-| TMP117 | ESP32 |
+| Fonction | ESP32 |
 |---|---:|
-| SDA | GPIO 21 |
-| SCL | GPIO 22 |
-| GND | GND |
-| VCC | 3,3 V si le breakout l'exige |
+| I2C SDA | GPIO 21 |
+| I2C SCL | GPIO 22 |
+| AD8232 OUT | GPIO 34 |
+| Potentiometre TEMP | GPIO 36 |
+| Potentiometre PRESSION | GPIO 35 |
+| Potentiometre FC | GPIO 39 |
+| GPS RX | GPIO 16 |
+| GPS TX | GPIO 17 |
+| GSM RX | GPIO 26 |
+| GSM TX | GPIO 27 |
+| SOS | GPIO 32 |
+| Buzzer | GPIO 14 |
+| RGB Rouge | GPIO 25 |
+| RGB Vert | GPIO 33 |
+| RGB Bleu | GPIO 13 |
 
-### MPU6050
+## Bus I2C
 
-| MPU6050 | ESP32 |
-|---|---:|
-| SDA | GPIO 21 |
-| SCL | GPIO 22 |
-| GND | GND |
-| VCC | alimentation compatible |
+GPIO 21 (SDA) est partage par le MPU6050, MAX30102 et OLED.
+GPIO 22 (SCL) est partage par le MPU6050, MAX30102 et OLED.
 
-### MAX30102
-
-| MAX30102 | ESP32 |
-|---|---:|
-| SDA | GPIO 21 |
-| SCL | GPIO 22 |
-| GND | GND |
-| VCC | alimentation compatible avec le breakout |
-
-### OLED SH1106 1,3"
-
-| OLED | ESP32 |
-|---|---:|
-| SDA | GPIO 21 |
-| SCL | GPIO 22 |
-| GND | GND |
-| VCC | 3,3 V si compatible |
-
-### AD8232
-
-| AD8232 | ESP32 |
-|---|---:|
-| OUTPUT | GPIO 34 |
-| GND | GND |
-| 3.3V | 3,3 V |
-
-Les électrodes RA, LA et RL sont raccordées au module AD8232 selon le repérage du breakout.
-
-### Potentiomètre — pression simulée
+## Potentiometre TEMP — remplacement du TMP117
 
 ```text
-3V3 ───────── extrémité 1
-GPIO 35 ───── curseur
-GND ───────── extrémité 2
+3V3  -> extremite 1
+GND  -> extremite 2
+GPIO 36 -> curseur
 ```
 
-Le potentiomètre ne mesure **pas** la tension artérielle. Il sert uniquement à produire une valeur de démonstration transformée par le firmware en pression systolique/diastolique simulée.
+Le firmware transforme la position en temperature simulee. Le TMP117 n'est pas necessaire dans NEO.
 
-### GPS
+## Potentiometre PRESSION
 
 ```text
-GPS TX ───────> ESP32 GPIO 16 (RX)
-GPS RX <────── ESP32 GPIO 17 (TX)
-GPS GND ────── GND commun
-GPS VCC ────── alimentation adaptée au module
+3V3  -> extremite 1
+GND  -> extremite 2
+GPIO 35 -> curseur
 ```
 
-### GSM
+Il simule la pression systolique/diastolique. Ce n'est pas une mesure medicale.
+
+## AD8232 + potentiometre FC
+
+AD8232 reste branche normalement :
 
 ```text
-GSM TX ───────> ESP32 GPIO 26 (RX)
-GSM RX <────── ESP32 GPIO 27 (TX)
-GSM GND ────── GND commun
-GSM VCC ────── alimentation adaptée au modèle
+AD8232 OUTPUT -> GPIO 34
+AD8232 GND    -> GND
+AD8232 3.3V   -> 3V3
 ```
 
-**Point critique :** ne pas alimenter un modem GSM directement depuis le 3,3 V de l'ESP32 sans vérifier explicitement que le module le permet. Les transmissions GSM peuvent provoquer des pointes de courant importantes.
+Le signal ECG AD8232 est acquis et affiche.
 
-### Bouton SOS
+Le potentiometre FC est independant :
 
 ```text
-GPIO 32 ───── bouton ───── GND
+3V3  -> extremite 1
+GND  -> extremite 2
+GPIO 39 -> curseur
 ```
 
-Le firmware utilise `INPUT_PULLUP` :
+Il simule une frequence cardiaque. Si le potentiometre est dans la plage normale (50 a 120 BPM), la FC MAX30102 est conservee comme source effective lorsqu'elle est valide. Si le potentiometre sort de cette plage, il devient la source de simulation de l'anomalie.
 
-- bouton relâché → HIGH
-- bouton appuyé → LOW
-
-### Buzzer
-
-Pour un petit buzzer compatible GPIO :
+## GPS
 
 ```text
-GPIO 14 ───── Buzzer +
-GND ───────── Buzzer -
+GPS TX -> ESP32 GPIO 16 (RX)
+GPS RX -> ESP32 GPIO 17 (TX)
+GND commun
 ```
 
-Si le buzzer demande plus de courant que le GPIO ne peut fournir, utiliser un transistor de commande et une alimentation adaptée.
-
-### LED RGB à cathode commune
-
-Utiliser une résistance série pour chaque couleur :
+## GSM
 
 ```text
-GPIO 25 ── résistance ── Rouge
-GPIO 33 ── résistance ── Vert
-GPIO 13 ── résistance ── Bleu
-Cathode commune ─────── GND
+GSM TX -> ESP32 GPIO 26 (RX)
+GSM RX -> ESP32 GPIO 27 (TX)
+GND commun
 ```
 
-Si la LED est à **anode commune**, la logique électrique doit être inversée et le firmware devra être adapté.
+Le GSM doit utiliser une alimentation adaptee a son modele et a ses pointes de courant. Ne pas l'alimenter depuis un GPIO de l'ESP32.
 
-## 4. Tableau GPIO complet
-
-| Fonction | GPIO ESP32 |
-|---|---:|
-| I²C SDA | 21 |
-| I²C SCL | 22 |
-| AD8232 OUT | 34 |
-| Potentiomètre | 35 |
-| GPS RX | 16 |
-| GPS TX | 17 |
-| GSM RX | 26 |
-| GSM TX | 27 |
-| SOS | 32 |
-| Buzzer | 14 |
-| RGB Rouge | 25 |
-| RGB Vert | 33 |
-| RGB Bleu | 13 |
-
-## 5. Masse commune
-
-Tous les modules qui communiquent directement avec l'ESP32 doivent partager une référence GND appropriée :
+## SOS / buzzer / RGB
 
 ```text
-                 ┌── TMP117
-                 ├── MPU6050
-ESP32 GND ───────┼── MAX30102
-                 ├── OLED
-                 ├── AD8232
-                 ├── GPS
-                 ├── GSM
-                 ├── Buzzer
-                 └── RGB / bouton
+SOS    : GPIO 32 -> bouton -> GND
+Buzzer : GPIO 14
+RGB R  : GPIO 25 + resistance
+RGB G  : GPIO 33 + resistance
+RGB B  : GPIO 13 + resistance
 ```
 
-Pour le GSM, la masse de son alimentation doit également être référencée correctement à la masse de l'ESP32 pour que l'UART fonctionne.
+## Regle d'alerte MEDIWATCH NEO
 
-## 6. Alimentation
+L'affichage et le diagnostic de prototype restent actifs meme si une seule source est anormale.
 
-Ne pas supposer que tous les modules acceptent la même tension. Vérifier le modèle exact du breakout.
+**SMS automatique = uniquement si 5/5 conditions sont anormales simultanement :**
 
-Le GSM est le point le plus sensible : prévoir une alimentation capable de fournir les pointes de courant du modem et des condensateurs de découplage appropriés selon le module.
+1. MPU6050 anormal / chute detectee
+2. Pot-TMP hors plage normale
+3. Pot-pression hors plage normale
+4. Pot-FC hors plage normale, avec AD8232 reel acquis et affiche
+5. MAX30102 anormal (FC ou SpO2 critique)
 
-## 7. Ordre de montage recommandé
+Le bouton **SOS** est volontairement une exception : il declenche un SMS immediat.
 
-1. ESP32 + alimentation stable
-2. OLED
-3. TMP117
-4. MPU6050
-5. MAX30102
-6. Potentiomètre
+## Ordre de montage
+
+1. ESP32 + alimentation
+2. OLED + bus I2C
+3. MPU6050
+4. MAX30102
+5. Pot-TMP
+6. Pot-pression
 7. AD8232
-8. GPS
-9. RGB + buzzer + SOS
-10. GSM avec son alimentation dédiée/appropriée
+8. Pot-FC
+9. GPS
+10. RGB + buzzer + SOS
+11. GSM et son alimentation adaptee
 
 Tester chaque bloc avant d'ajouter le suivant.
-
-## Statut
-
-**MediWatch V2 — câblage de référence pour le prototype.**
-
-Le brochage décrit ici correspond au firmware `firmware/MediWatch_V2/MediWatch_V2.ino`.
