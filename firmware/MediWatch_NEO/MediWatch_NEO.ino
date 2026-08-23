@@ -51,21 +51,16 @@ bool sendSMS(const String& number, const String& message);
 // ========================= BROCHES CARTE =========================
 #define PIN_SDA       21
 #define PIN_SCL       22
-
 #define PIN_ECG       34      // P34
 #define PIN_TEMP_POT  36      // VP
 #define PIN_PRESS_POT 35      // P35
 #define PIN_HR_POT    39      // VN
-
 #define PIN_GPS_RX    16      // P16
 #define PIN_GPS_TX    17      // P17
-
 #define PIN_GSM_RX    26      // P26
 #define PIN_GSM_TX    27      // P27
-
 #define PIN_SOS       32      // P32
 #define PIN_BUZZER    14      // P14
-
 #define PIN_LED_R     25      // P25
 #define PIN_LED_G     33      // P33
 #define PIN_LED_B     13      // P13
@@ -73,7 +68,6 @@ bool sendSMS(const String& number, const String& message);
 // ========================= PARAMETRES ============================
 const char* WIFI_SSID = "MEDIWATCH";
 const char* WIFI_PASSWORD = "mediwatch123";
-
 String patientName = "UWASE";
 String contact1 = "+243XXXXXXXXX";
 String contact2 = "+243XXXXXXXXX";
@@ -87,10 +81,8 @@ const float PRESS_WARNING = 140.0;
 const int HR_LOW = 50;
 const int HR_HIGH = 120;
 const int SPO2_CRITICAL = 90;
-
 const float MPU_FALL_G = 2.5;
 const float MPU_IMPACT_G = 22.0;
-
 const unsigned long SENSOR_INTERVAL = 100;
 const unsigned long DISPLAY_INTERVAL = 500;
 const unsigned long ALERT_CONFIRM_TIME = 5000;
@@ -112,7 +104,6 @@ bool mpuOK = false;
 bool maxOK = false;
 bool gsmOK = false;
 bool gpsValid = false;
-
 bool tempAbnormal = false;
 bool pressureAbnormal = false;
 bool hrPotAbnormal = false;
@@ -138,7 +129,6 @@ float accelX = 0.0;
 float accelY = 0.0;
 float accelZ = 0.0;
 float accelMagnitude = 9.81;
-
 bool hrValid = false;
 bool spo2Valid = false;
 String hrSource = "MAX30102";
@@ -150,6 +140,7 @@ unsigned long lastDisplay = 0;
 unsigned long lastBeep = 0;
 unsigned long allAbnormalSince = 0;
 unsigned long lastSOS = 0;
+unsigned long sosUntil = 0;
 unsigned long lowAccelSince = 0;
 
 const int SPO2_SAMPLES = 100;
@@ -227,7 +218,6 @@ void readMPU() {
 
   sensors_event_t accel, gyro, temp;
   mpu.getEvent(&accel, &gyro, &temp);
-
   accelX = accel.acceleration.x;
   accelY = accel.acceleration.y;
   accelZ = accel.acceleration.z;
@@ -331,6 +321,17 @@ void readMAX30102() {
 
 // ========================= LOGIQUE 5/5 ============================
 void evaluateSystem() {
+  // SOS garde la priorite pendant 3 secondes.
+  if (state == "SOS") {
+    if (millis() < sosUntil) {
+      setRGB(false, false, true);
+      buzzerUpdate();
+      return;
+    }
+    buzzerOff();
+    state = "NORMAL";
+  }
+
   // Condition 4 = POT-FC anormal + AD8232 fournissant un signal.
   bool condition4 = hrPotAbnormal && ad8232Active;
 
@@ -463,6 +464,7 @@ void checkSOS() {
     lastSOS = millis();
     state = "SOS";
     reason = "SOS manuel";
+    sosUntil = millis() + 3000;
     setRGB(false, false, true);
     buzzerShortStart();
     sendEmergencyAlert();
@@ -474,20 +476,15 @@ void checkSOS() {
 // ============================ OLED ================================
 void updateOLED() {
   char line[32];
-
   oled.clearBuffer();
   oled.setFont(u8g2_font_6x10_tf);
   oled.drawStr(0, 9, "MEDIWATCH NEO");
-
   snprintf(line, sizeof(line), "ETAT: %s", stateName().c_str());
   oled.drawStr(0, 20, line);
-
   snprintf(line, sizeof(line), "FC: %d %s", effectiveHR, hrSource.c_str());
   oled.drawStr(0, 31, line);
-
   snprintf(line, sizeof(line), "SpO2: %d%%", spo2Valid ? spo2 : 0);
   oled.drawStr(0, 42, line);
-
   snprintf(line, sizeof(line), "T: %.1f BP: %.0f/%.0f", temperature, systolic, diastolic);
   oled.drawStr(0, 53, line);
   oled.sendBuffer();
@@ -560,13 +557,11 @@ void handleData() { server.send(200, "application/json", makeJSON()); }
 // =========================== INITIALISATION =======================
 void setup() {
   Serial.begin(115200);
-
   pinMode(PIN_SOS, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_LED_R, OUTPUT);
   pinMode(PIN_LED_G, OUTPUT);
   pinMode(PIN_LED_B, OUTPUT);
-
   pinMode(PIN_ECG, INPUT);
   pinMode(PIN_TEMP_POT, INPUT);
   pinMode(PIN_PRESS_POT, INPUT);
@@ -580,7 +575,6 @@ void setup() {
 
   setRGB(false, true, false);
   buzzerOff();
-
   Wire.begin(PIN_SDA, PIN_SCL);
 
   oled.begin();
@@ -611,7 +605,6 @@ void setup() {
 
   WiFi.mode(WIFI_AP);
   WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
-
   server.on("/", HTTP_GET, handleRoot);
   server.on("/api/data", HTTP_GET, handleData);
   server.begin();
@@ -633,7 +626,6 @@ void setup() {
 // =============================== LOOP =============================
 void loop() {
   unsigned long now = millis();
-
   server.handleClient();
   readGPS();
 
