@@ -1,163 +1,297 @@
-# MediWatch V2 — Câblage complet
+# MediWatch NEO — Câblage complet
 
-## Vue générale
+## 1. Vue générale
 
 ```text
                          ┌──────────────────┐
                          │       ESP32       │
+                         │    NodeMCU-32S    │
                          └────────┬─────────┘
                                   │
           ┌───────────────────────┼──────────────────────┐
           │                       │                      │
          I²C                     UART                  ADC/GPIO
           │                       │                      │
-  ┌───────┼────────┐       ┌─────┴─────┐        ┌──────┴──────┐
-  │       │        │       │           │        │             │
- TMP117 MPU6050 MAX30102  GPS         GSM    AD8232         POT
-  │       │        │       │           │        │             │
-  └───────┴────────┴──┐    │           │        │             │
-                      │    │           │        │             │
-                    OLED   │           │        │             │
-                      │    │           │        │             │
-                      └────┴───────────┴────────┴─────────────┘
-
-GPIO 32 → SOS
-GPIO 14 → Buzzer
-GPIO 25 → RGB Rouge
-GPIO 33 → RGB Vert
-GPIO 13 → RGB Bleu
+   ┌──────┼───────┐        ┌─────┴─────┐        ┌──────┴─────────┐
+   │      │       │        │           │        │       │        │
+ MPU   MAX30102 OLED      GPS         GSM     AD8232 POT-TMP POT-PRESS
+                                                │             │
+                                                │           POT-FC
+                                                │
+                                  + RGB + Buzzer + SOS
 ```
 
-## Tableau de référence
+Le TMP117 est absent du prototype NEO : il est remplace par POT-TMP.
 
-| Fonction | Module | ESP32 |
-|---|---|---:|
-| SDA | TMP117 / MPU6050 / MAX30102 / OLED | GPIO 21 |
-| SCL | TMP117 / MPU6050 / MAX30102 / OLED | GPIO 22 |
-| ECG analogique | AD8232 OUT | GPIO 34 |
-| Pression simulée | Potentiomètre curseur | GPIO 35 |
-| RX GPS | GPS TX | GPIO 16 |
-| TX GPS | GPS RX | GPIO 17 |
-| RX GSM | GSM TX | GPIO 26 |
-| TX GSM | GSM RX | GPIO 27 |
-| SOS | bouton vers GND | GPIO 32 |
-| Buzzer | entrée commande | GPIO 14 |
-| Rouge | LED RGB via résistance | GPIO 25 |
-| Vert | LED RGB via résistance | GPIO 33 |
-| Bleu | LED RGB via résistance | GPIO 13 |
+## 2. Tableau de référence
 
-## I²C partagé
+| Fonction | Module | Broche ESP32 visible | GPIO |
+|---|---|---:|---:|
+| I2C SDA | OLED + MPU6050 + MAX30102 | P21 | GPIO21 |
+| I2C SCL | OLED + MPU6050 + MAX30102 | P22 | GPIO22 |
+| ECG analogique | AD8232 OUT | P34 | GPIO34 |
+| Temperature simulee | POT-TMP curseur | VP | GPIO36 |
+| Pression simulee | POT-PRESSION curseur | P35 | GPIO35 |
+| FC simulee | POT-FC curseur | VN | GPIO39 |
+| RX GPS ESP32 | GPS TX | P16 | GPIO16 |
+| TX GPS ESP32 | GPS RX | P17 | GPIO17 |
+| RX GSM ESP32 | GSM TXD | P26 | GPIO26 |
+| TX GSM ESP32 | GSM RXD via adaptation | P27 | GPIO27 |
+| SOS | bouton vers GND | P32 | GPIO32 |
+| Buzzer | entree commande | P14 | GPIO14 |
+| Rouge | LED RGB via resistance | P25 | GPIO25 |
+| Vert | LED RGB via resistance | P33 | GPIO33 |
+| Bleu | LED RGB via resistance | P13 | GPIO13 |
+
+Les GPIO34, 35, 36 et 39 sont des entrees uniquement. Ils sont reserves ici aux signaux analogiques.
+
+## 3. Alimentation générale
+
+La batterie utilisee est une **Li-Po 3S 11,1 V / 1100 mAh**, pouvant atteindre **12,6 V chargee**.
 
 ```text
-GPIO 21 SDA ──┬── TMP117 SDA
-              ├── MPU6050 SDA
-              ├── MAX30102 SDA
-              └── OLED SDA
+Li-Po 3S
+   │
+   ├── + → fusible → interrupteur → + Buck 5 V
+   │                              └→ + Buck 4 V
+   │
+   └── - ─────────────────────────→ masses / GND commun
 
-GPIO 22 SCL ──┬── TMP117 SCL
-              ├── MPU6050 SCL
-              ├── MAX30102 SCL
-              └── OLED SCL
+Buck 5 V → ESP32 VIN/5V
+Buck 4 V → SIM800L VCC/VBAT
+ESP32 3V3 → modules compatibles 3,3 V
 ```
 
-Partager SDA/SCL est normal pour des périphériques I²C ayant des adresses distinctes.
+**La Li-Po ne doit jamais etre branchee directement sur l'ESP32, le SIM800L ou un ADC.**
 
-## Alimentation
+Le cablage detaille, les reglages au multimetre et le role du connecteur d'equilibrage sont documentes dans [`power.md`](power.md).
 
-Ne pas supposer que tous les breakouts ont les mêmes exigences. Vérifier le modèle exact avant de connecter VCC.
-
-Le **GSM est le point critique** : son alimentation doit supporter les pointes de courant pendant l'émission. Ne pas alimenter un modem GSM directement depuis le 3,3 V de l'ESP32 sans validation du modèle.
-
-Toutes les masses doivent être correctement référencées ensemble lorsque les modules communiquent avec l'ESP32.
-
-## GPS
+## 4. I²C partage
 
 ```text
-GPS TX → ESP32 GPIO 16
-GPS RX ← ESP32 GPIO 17
+ESP32 P21 / GPIO21 SDA
+       ├── OLED SDA
+       ├── MPU6050 SDA
+       └── MAX30102 SDA
+
+ESP32 P22 / GPIO22 SCL
+       ├── OLED SCL
+       ├── MPU6050 SCL
+       └── MAX30102 SCL
+```
+
+Les modules I²C doivent avoir des adresses compatibles et distinctes lorsqu'elles sont necessaires.
+
+## 5. OLED SH1106 1,3 pouces
+
+```text
+OLED VCC → ESP32 3V3
+OLED GND → ESP32 GND
+OLED SDA → ESP32 P21
+OLED SCL → ESP32 P22
+```
+
+## 6. MPU6050
+
+```text
+MPU6050 VCC → ESP32 3V3
+MPU6050 GND → ESP32 GND
+MPU6050 SDA → ESP32 P21
+MPU6050 SCL → ESP32 P22
+```
+
+La detection de chute reste experimentale.
+
+## 7. MAX30102
+
+Pour un breakout explicitement compatible 3,3 V :
+
+```text
+MAX30102 VCC → ESP32 3V3
+MAX30102 GND → ESP32 GND
+MAX30102 SDA → ESP32 P21
+MAX30102 SCL → ESP32 P22
+```
+
+## 8. AD8232 — ECG reel
+
+```text
+AD8232 3.3V   → ESP32 3V3
+AD8232 GND    → ESP32 GND
+AD8232 OUTPUT → ESP32 P34
+```
+
+Le signal ECG est acquis et affiche mais n'est pas interprete medicalement.
+
+## 9. POT-TMP — remplacement du TMP117
+
+```text
+POT-TMP borne 1 → ESP32 3V3
+POT-TMP borne 2 → ESP32 GND
+POT-TMP curseur → ESP32 VP / GPIO36
+```
+
+Le firmware transforme la valeur ADC en temperature simulee.
+
+## 10. POT-PRESSION
+
+```text
+POT-PRESSION borne 1 → ESP32 3V3
+POT-PRESSION borne 2 → ESP32 GND
+POT-PRESSION curseur → ESP32 P35 / GPIO35
+```
+
+La pression systolique/diastolique est simulee par le firmware.
+
+## 11. POT-FC + AD8232
+
+Le potentiometre ne remplace pas l'AD8232.
+
+```text
+POT-FC borne 1 → ESP32 3V3
+POT-FC borne 2 → ESP32 GND
+POT-FC curseur → ESP32 VN / GPIO39
+
+AD8232 OUTPUT → ESP32 P34 / GPIO34
+```
+
+La condition d'urgence n°4 est :
+
+```text
+POT-FC anormal
+      ET
+AD8232 signal present
+```
+
+## 12. GPS NEO-6M-0-001
+
+Pour le module nu, utiliser une alimentation conforme au module, typiquement 3,3 V :
+
+```text
+GPS VCC → ESP32 3V3
 GPS GND → GND commun
-GPS VCC → alimentation conforme au module
+GPS TX  → ESP32 P16 / GPIO16
+GPS RX  ← ESP32 P17 / GPIO17
 ```
 
-## GSM
+C'est un croisement UART : TX du GPS vers RX de l'ESP32 et RX du GPS depuis TX de l'ESP32.
+
+## 13. GSM SIM800L
+
+Le SIM800L utilise son alimentation dediee **4,00 V** issue du Buck 2 :
 
 ```text
-GSM TX → ESP32 GPIO 26
-GSM RX ← ESP32 GPIO 27
-GSM GND → GND commun
-GSM VCC → alimentation conforme au module
+Buck 2 OUT+ 4,00 V → SIM800L VCC/VBAT
+Buck 2 OUT-        → SIM800L GND
 ```
 
-## AD8232
+Le buck doit supporter les pointes de courant du modem.
+
+UART :
 
 ```text
-AD8232 OUTPUT → GPIO 34
-AD8232 GND    → GND
-AD8232 3.3V   → 3,3 V
+SIM800L TXD ─────────────────────→ ESP32 P26 / GPIO26
+
+ESP32 P27 / GPIO27
+       │
+      1 kΩ
+       │
+       ├────────────────────────→ SIM800L RXD
+       │
+      5.6 kΩ
+       │
+      GND
 ```
 
-RA, LA et RL sont raccordés aux électrodes selon le repérage du module.
+L'adaptation est utilisee pour ramener le niveau logique TX 3,3 V de l'ESP32 vers une tension adaptee a l'entree RX du SIM800L.
 
-## Potentiomètre
+Connecter l'antenne GSM avant les essais d'emission.
+
+## 14. Bouton SOS
 
 ```text
-3V3 ─────── extrémité
-GPIO 35 ─── curseur
-GND ─────── extrémité
+ESP32 P32 ───── bouton ───── GND
 ```
 
-La valeur produite est transformée en pression **simulée** par le firmware.
-
-## SOS
+Le firmware utilise `INPUT_PULLUP` :
 
 ```text
-GPIO 32 ───── bouton ───── GND
+Relache → HIGH
+Appuye  → LOW
 ```
 
-Le firmware utilise `INPUT_PULLUP` : appui = LOW.
+Le SOS est independant de la condition 5/5 et declenche une alerte immediate.
 
-## Buzzer
+## 15. Buzzer
 
-Petit buzzer compatible GPIO :
+Pour un petit buzzer compatible GPIO :
 
 ```text
-GPIO 14 → Buzzer +
-GND     → Buzzer -
+ESP32 P14 → Buzzer +
+ESP32 GND → Buzzer -
 ```
 
-Pour un buzzer plus puissant, utiliser un transistor de commande et une alimentation adaptée.
+Pour un buzzer demandant davantage de courant, utiliser un transistor de commande.
 
-## LED RGB
+## 16. LED RGB
 
-Pour une LED RGB à cathode commune :
+Pour une LED RGB a cathode commune :
 
 ```text
-GPIO 25 ── résistance ── R
-GPIO 33 ── résistance ── G
-GPIO 13 ── résistance ── B
-Cathode commune ─────── GND
+ESP32 P25 → resistance → R
+ESP32 P33 → resistance → G
+ESP32 P13 → resistance → B
+Cathode commune → GND
 ```
 
-Utiliser une résistance par couleur. Si la LED est à anode commune, inverser la logique de commande dans le firmware.
+Utiliser une resistance pour chaque couleur.
 
-## Ordre de validation
+## 17. Regle d'urgence 5/5
 
-1. ESP32 + alimentation
-2. OLED
-3. Bus I²C
-4. TMP117
-5. MPU6050
-6. MAX30102
-7. potentiomètre
-8. AD8232
-9. GPS
-10. RGB + buzzer + SOS
-11. GSM
-12. dashboard et alertes
+```text
+1. MPU6050 anormal / chute
+          AND
+2. POT-TMP hors plage
+          AND
+3. POT-PRESSION hors plage
+          AND
+4. POT-FC hors plage + AD8232 actif
+          AND
+5. MAX30102 anormal
+          ↓
+       5 / 5
+          ↓
+ confirmation 5 secondes
+          ↓
+       SMS GSM
+```
 
-## Sécurité du prototype
+Le GPS ajoute la position au SMS mais n'est pas une condition medicale du 5/5.
 
-- Ne pas utiliser les valeurs de MediWatch pour prendre une décision médicale.
-- Ne pas connecter une personne à un montage dont l'alimentation ou l'isolation n'a pas été validée.
-- L'AD8232 doit être utilisé conformément à la documentation du module et dans un contexte expérimental approprié.
-- Le GSM doit être alimenté séparément/avec une alimentation dimensionnée lorsque nécessaire.
+## 18. Ordre de validation
+
+1. Regler **Buck 5 V à 5,00 V** au multimetre, sans ESP32 connecte.
+2. Regler **Buck 4 V à 4,00 V** au multimetre, sans SIM800L connecte.
+3. Verifier les polarites et la masse commune.
+4. ESP32 + OLED.
+5. Bus I²C + MPU6050.
+6. MAX30102.
+7. POT-TMP.
+8. POT-PRESSION.
+9. AD8232.
+10. POT-FC.
+11. GPS.
+12. RGB + buzzer + SOS.
+13. SIM800L + antenne + SIM.
+14. Dashboard.
+15. Test des 5 conditions d'urgence.
+
+## 19. Securite
+
+- Ne pas utiliser MediWatch pour un diagnostic ou une decision medicale.
+- Ne pas connecter directement la Li-Po 3S aux modules basse tension.
+- Ne jamais envoyer 5 V sur la broche 3V3 de l'ESP32.
+- Ne jamais envoyer 5 V sur le SIM800L.
+- Regler chaque buck au multimetre avant de connecter la charge.
+- Ne jamais utiliser le connecteur d'equilibrage de la Li-Po comme alimentation improvisee.
+- Utiliser un chargeur Li-Po 3S equilibre adapte.
