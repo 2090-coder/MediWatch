@@ -67,6 +67,40 @@ La version NEO remplace le TMP117 absent par un potentiometre de temperature et 
 
 GPIO 21/22 sont le bus I2C partage par MPU6050, MAX30102 et OLED.
 
+## Alimentation — Li-Po 3S
+
+MediWatch NEO est alimente par une **Li-Po 3S 11,1 V / 1100 mAh**. Sa tension peut atteindre **12,6 V lorsqu'elle est completement chargee**.
+
+La batterie n'est **jamais** branchee directement sur l'ESP32 ou le SIM800L. L'architecture utilise deux convertisseurs buck :
+
+```text
+Li-Po 3S 11,1 V / 12,6 V max
+              |
+        fusible + ON/OFF
+              |
+       +------+------+
+       |             |
+    Buck 1         Buck 2
+    5,00 V          4,00 V
+       |             |
+    ESP32         SIM800L
+    VIN/5V          VCC
+       |             |
+       +------GND---+
+              |
+         masse commune
+```
+
+- **Buck 1 : 5,00 V** → entrée VIN/5V de l'ESP32.
+- **Buck 2 : 4,00 V** → alimentation dediee du SIM800L, capable de supporter ses pointes de courant.
+- **3V3 de l'ESP32** → modules compatibles 3,3 V et potentiometres.
+- **GND** → masse commune de tous les modules.
+- Le **connecteur blanc 4 broches** de la batterie est le connecteur d'equilibrage 3S : il est reserve au chargeur Li-Po equilibre et ne sert pas a alimenter les modules.
+
+Les sorties des deux bucks doivent etre reglees au **multimetre avant de connecter les modules**. Ne jamais envoyer 5 V sur la broche 3V3 et ne jamais envoyer 5 V ou 12,6 V directement au SIM800L.
+
+Le cablage complet et la procedure de verification sont dans [`docs/power.md`](docs/power.md).
+
 ## Logique FC + AD8232
 
 L'AD8232 reste reel et son signal analogique est acquis sur GPIO 34 et affiche sur le dashboard.
@@ -190,7 +224,8 @@ MediWatch/
 ├── docs/
 │   ├── architecture.md
 │   ├── protocol.md
-│   └── wiring.md
+│   ├── wiring.md
+│   └── power.md
 └── README.md
 ```
 
@@ -209,13 +244,14 @@ MediWatch/
 1. Installer Arduino IDE et le core ESP32.
 2. Installer les bibliotheques NEO.
 3. Ouvrir `firmware/MediWatch_NEO/MediWatch_NEO.ino`.
-4. Verifier le cablage dans `hardware/README.md`.
-5. Configurer les numeros `contact1`, `contact2`, `contact3` et `hospitalContact`.
-6. Verifier l'alimentation du GSM.
-7. Televerser.
-8. Ouvrir le moniteur serie a 115200 bauds.
-9. Se connecter au Wi-Fi `MEDIWATCH`.
-10. Ouvrir `http://192.168.4.1`.
+4. Verifier le cablage dans `hardware/README.md` et `docs/power.md`.
+5. Regler et verifier les deux bucks au multimetre : 5,00 V et 4,00 V.
+6. Configurer les numeros `contact1`, `contact2`, `contact3` et `hospitalContact`.
+7. Verifier l'alimentation du GSM.
+8. Televerser.
+9. Ouvrir le moniteur serie a 115200 bauds.
+10. Se connecter au Wi-Fi `MEDIWATCH`.
+11. Ouvrir `http://192.168.4.1`.
 
 ## Ordre de test
 
